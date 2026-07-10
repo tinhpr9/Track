@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template_string
-from datetime import datetime
+from datetime import datetime, timedelta
 import time, json, os
 
 app = Flask(__name__)
@@ -59,7 +59,7 @@ def receive_stats():
             diff = new_sheckles - old_sheckles
             action = "TĂNG" if diff > 0 else "GIẢM"
             log_entry = {
-                "time": datetime.now().strftime("%d/%m %H:%M:%S"),
+                "time": (datetime.utcnow() + timedelta(hours=7)).strftime("%d/%m %H:%M:%S"),
                 "user": username,
                 "action": action,
                 "amount": abs(diff),
@@ -79,7 +79,7 @@ def receive_stats():
 
         acc['stats'] = user_stats
         acc['last_ping'] = curr_time
-        acc['last_updated'] = datetime.now().strftime("%H:%M:%S")
+        acc['last_updated'] = (datetime.utcnow() + timedelta(hours=7)).strftime("%H:%M:%S")
         acc['sph'] = max(0, sph)
         
         save_db()
@@ -96,13 +96,17 @@ def clear_history():
 @app.route('/')
 def dashboard():
     total_stats = {}
-    total_sph = online_count = offline_count = 0
+    total_sph = online_count = offline_count = idle_count = 0
     current_time = time.time()
     
     for user, data in stats_db['accounts'].items():
         if current_time - data.get('last_ping', 0) <= 600:
-            data['status'] = 'ON'
-            online_count += 1
+            if data.get('sph', 0) == 0:
+                data['status'] = 'IDLE'
+                idle_count += 1
+            else:
+                data['status'] = 'ON'
+                online_count += 1
             total_sph += data.get('sph', 0)
         else:
             data['status'] = 'OFF'
@@ -119,7 +123,7 @@ def dashboard():
         <title>Nông Trại Command Center</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-            :root { --bg: #11111b; --card: #181825; --card-hover: #313244; --text: #cdd6f4; --accent: #89b4fa; --green: #a6e3a1; --red: #f38ba8; --yellow: #f9e2af; --border: #45475a; }
+            :root { --bg: #11111b; --card: #181825; --card-hover: #313244; --text: #cdd6f4; --accent: #89b4fa; --green: #a6e3a1; --red: #f38ba8; --yellow: #f9e2af; --border: #45475a; --idle: #fab387; }
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 0; }
             .navbar { display: flex; background-color: var(--card); border-bottom: 2px solid var(--border); padding: 0 20px; overflow-x: auto; white-space: nowrap; }
             .tab-btn { background: none; border: none; color: var(--text); padding: 15px 20px; font-size: 15px; font-weight: bold; cursor: pointer; opacity: 0.6; transition: 0.3s; border-bottom: 3px solid transparent; }
@@ -137,9 +141,9 @@ def dashboard():
             .card-online::before { background: var(--green); }
             .card-money::before { background: var(--yellow); }
             .card-seeds::before { background: #cba6f7; }
-            .card-planted::before { background: #fab387; }
+            .card-planted::before { background: var(--idle); }
             
-            .card-title { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #a6adc8; margin-bottom: 10px; display: flex; justify-content: space-between; }
+            .card-title { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #a6adc8; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
             .card-value { font-size: 28px; font-weight: bold; }
             .card-sub { font-size: 13px; color: var(--green); margin-top: 5px; font-weight: bold; }
 
@@ -147,8 +151,10 @@ def dashboard():
             th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
             th { background-color: #313244; color: #a6adc8; font-size: 12px; text-transform: uppercase; }
             tr:hover { background-color: var(--card-hover); }
-            .badge-on { background: rgba(166,227,161,0.1); color: var(--green); padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-            .badge-off { background: rgba(243,139,168,0.1); color: var(--red); padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+            
+            .badge-on { background: rgba(166,227,161,0.1); color: var(--green); border: 1px solid var(--green); padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+            .badge-idle { background: rgba(250,179,135,0.1); color: var(--idle); border: 1px solid var(--idle); padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+            .badge-off { background: rgba(243,139,168,0.1); color: var(--red); border: 1px solid var(--red); padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
             
             .category { margin-bottom: 20px; }
             .cat-title { font-size: 14px; text-transform: uppercase; color: #a6adc8; margin-bottom: 10px; font-weight: bold; border-bottom: 1px dashed var(--border); padding-bottom: 5px;}
@@ -164,18 +170,19 @@ def dashboard():
             .badge-gear .stat-val { color: var(--accent); }
             .badge-pet { border-color: #cba6f7; }
             .badge-pet .stat-val { color: #cba6f7; }
-            .badge-other .stat-val { color: #fab387; }
+            .badge-other .stat-val { color: var(--idle); }
             
             .text-green { color: var(--green); font-weight: bold; }
             .text-red { color: var(--red); font-weight: bold; }
             .btn-danger { background: var(--red); color: #11111b; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-bottom: 15px; }
             .btn-danger:hover { opacity: 0.8; }
+            .server-status { font-size: 12px; font-weight: normal; background: #181825; padding: 4px 10px; border-radius: 20px; border: 1px solid #45475a;}
         </style>
     </head>
     <body>
         <div class="navbar">
             <button class="tab-btn active" onclick="openTab('tab-overview', this)">📊 Tổng Quan</button>
-            <button class="tab-btn" onclick="openTab('tab-accounts', this)">👥 Tài Khoản ({{ online_count }}/{{ stats_db['accounts']|length }})</button>
+            <button class="tab-btn" onclick="openTab('tab-accounts', this)">👥 Tài Khoản ({{ online_count + idle_count }}/{{ stats_db['accounts']|length }})</button>
             <button class="tab-btn" onclick="openTab('tab-inventory', this)">📦 TỔNG KHO</button>
             <button class="tab-btn" onclick="openTab('tab-history', this)">🕒 Lịch Sử GD</button>
         </div>
@@ -184,9 +191,14 @@ def dashboard():
             <div id="tab-overview" class="tab-content active">
                 <div class="dashboard-grid">
                     <div class="stat-card card-online">
-                        <div class="card-title">TRỰC TUYẾN <span style="color:var(--green)">ON</span></div>
-                        <div class="card-value">{{ online_count }} / {{ stats_db['accounts']|length }}</div>
-                        <div class="card-sub">Máy đang cày</div>
+                        <div class="card-title">
+                            <span>TÌNH TRẠNG MÁY</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 10px;">
+                            <span class="badge-on">🟢 {{ online_count }} ĐANG CÀY</span>
+                            <span class="badge-idle">🟡 {{ idle_count }} BỊ KẸT</span>
+                            <span class="badge-off">🔴 {{ offline_count }} OFF</span>
+                        </div>
                     </div>
                     <div class="stat-card card-money">
                         <div class="card-title">TỔNG SHECKLES <span style="color:var(--yellow)">💰</span></div>
@@ -200,7 +212,7 @@ def dashboard():
                             {% for k, v in total_stats.items() %}{% if '[Planted]' in k %}{% set ns.planted = ns.planted + v %}{% endif %}{% endfor %}
                             {{ format_num(ns.planted) }}
                         </div>
-                        <div class="card-sub">Gốc cây</div>
+                        <div class="card-sub" style="color: var(--idle)">Gốc cây</div>
                     </div>
                     <div class="stat-card card-seeds">
                         <div class="card-title">HẠT GIỐNG (Trong túi) 🌱</div>
@@ -209,7 +221,7 @@ def dashboard():
                             {% for k, v in total_stats.items() %}{% if 'Seed' in k %}{% set ns2.seeds = ns2.seeds + v %}{% endif %}{% endfor %}
                             {{ format_num(ns2.seeds) }}
                         </div>
-                        <div class="card-sub">Tổng hạt giống</div>
+                        <div class="card-sub" style="color: #cba6f7">Tổng hạt giống</div>
                     </div>
                 </div>
             </div>
@@ -226,8 +238,9 @@ def dashboard():
                     {% for user, data in stats_db['accounts'].items() %}
                     <tr>
                         <td>
-                            {% if data.status == 'ON' %}<span class="badge-on">TRỰC TUYẾN</span>
-                            {% else %}<span class="badge-off">NGOẠI TUYẾN</span>{% endif %}
+                            {% if data.status == 'ON' %}<span class="badge-on">🟢 ĐANG CÀY</span>
+                            {% elif data.status == 'IDLE' %}<span class="badge-idle">🟡 BỊ KẸT (0/h)</span>
+                            {% else %}<span class="badge-off">🔴 MẤT KẾT NỐI</span>{% endif %}
                         </td>
                         <td><strong>{{ user }}</strong></td>
                         <td style="color: var(--yellow); font-weight: bold;">{{ format_num(data.stats.get('Sheckles', 0)) }}</td>
@@ -238,7 +251,6 @@ def dashboard():
                 </table>
             </div>
 
-            <!-- TAB TỔNG KHO (MỚI) -->
             <div id="tab-inventory" class="tab-content">
                 <div style="background: var(--card); padding: 25px; border-radius: 10px; border: 1px solid var(--border);">
                     <h3 style="margin-top:0; color: var(--yellow); border-bottom: 1px solid var(--border); padding-bottom: 15px;">📦 TÀI SẢN TOÀN SERVER (GỘP TỪ TẤT CẢ TÀI KHOẢN)</h3>
@@ -337,8 +349,8 @@ def dashboard():
     </body>
     </html>
     """
-    return render_template_string(html_template, stats_db=stats_db, total_stats=total_stats, total_sph=total_sph, online_count=online_count, offline_count=offline_count, format_num=format_num, get_category=get_category)
+    return render_template_string(html_template, stats_db=stats_db, total_stats=total_stats, total_sph=total_sph, online_count=online_count, offline_count=offline_count, idle_count=idle_count, format_num=format_num, get_category=get_category)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
-    
+            
