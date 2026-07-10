@@ -35,18 +35,15 @@ def receive_stats():
         sheckles = float(user_stats.get('Sheckles', 0))
         
         if username not in stats_db:
-            stats_db[username] = {'history': [], 'stats': {}, 'sph': 0}
+            stats_db[username] = {'history': [], 'stats': {}, 'sph': 0, 'last_ping': 0}
             
         history = stats_db[username]['history']
         
-        # Lưu lại mốc tiền để tính toán tốc độ
         if sheckles > 0:
             history.append((curr_time, sheckles))
             
-        # Chỉ giữ lại dữ liệu trong 1 giờ qua (3600 giây) để bộ nhớ luôn nhẹ
         history = [h for h in history if curr_time - h[0] <= 3600]
         
-        # Thuật toán tính Tốc độ Farm (Sheckles mỗi giờ)
         sph = 0
         if len(history) > 1:
             oldest_time, oldest_sheck = history[0]
@@ -58,8 +55,9 @@ def receive_stats():
         stats_db[username].update({
             'stats': user_stats,
             'last_updated': datetime.now().strftime("%H:%M:%S"),
+            'last_ping': curr_time, # Ghi nhận thời gian hoạt động cuối
             'history': history,
-            'sph': max(0, sph) # Không hiển thị số âm nếu lỡ mua đồ
+            'sph': max(0, sph)
         })
         return jsonify({"status": "OK"}), 200
     except Exception as e:
@@ -67,14 +65,24 @@ def receive_stats():
 
 @app.route('/')
 def dashboard():
-    # Quét toàn bộ dữ liệu để làm Bảng Tổng Kết
     total_stats = {}
     total_sph = 0
+    online_count = 0
+    offline_count = 0
+    current_time = time.time()
+    
     for user, data in stats_db.items():
-        total_sph += data.get('sph', 0)
+        # Kiểm tra nếu mất kết nối quá 10 phút (600 giây)
+        if current_time - data.get('last_ping', 0) <= 600:
+            data['status'] = 'ON'
+            online_count += 1
+            total_sph += data.get('sph', 0) # Chỉ tính SPH cho máy đang chạy
+        else:
+            data['status'] = 'OFF'
+            offline_count += 1
+            
         for k, v in data.get('stats', {}).items():
-            try:
-                total_stats[k] = total_stats.get(k, 0) + float(v)
+            try: total_stats[k] = total_stats.get(k, 0) + float(v)
             except: pass
 
     html_template = """
@@ -87,15 +95,18 @@ def dashboard():
             body { font-family: Arial, sans-serif; background-color: #1e1e2e; color: #cdd6f4; padding: 15px; margin: 0; }
             h2 { font-size: 20px; margin-top: 0; }
             
-            /* THẺ TỔNG KẾT (GRAND TOTAL) */
             .summary-card { background-color: #313244; border: 2px solid #f9e2af; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-            .summary-title { font-size: 16px; font-weight: bold; color: #f9e2af; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #45475a; padding-bottom: 5px; }
+            .summary-title { font-size: 16px; font-weight: bold; color: #f9e2af; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #45475a; padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center;}
+            
+            .server-status { font-size: 13px; font-weight: normal; background: #181825; padding: 4px 10px; border-radius: 20px; border: 1px solid #45475a;}
+            .txt-on { color: #a6e3a1; font-weight: bold; }
+            .txt-off { color: #f38ba8; font-weight: bold; }
+
             .total-sheckles { font-size: 22px; font-weight: bold; color: #a6e3a1; margin-bottom: 10px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px;}
             .sph-badge { background-color: #a6e3a1; color: #11111b; padding: 4px 8px; border-radius: 6px; font-size: 14px; font-weight: bold; }
             .summary-items { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
             .sum-item { background: #181825; padding: 3px 8px; border-radius: 4px; border: 1px solid #45475a; }
 
-            /* DANH SÁCH THU GỌN (ACCORDION) */
             details { margin-bottom: 8px; background-color: #181825; border-radius: 8px; border: 1px solid #45475a; overflow: hidden; }
             summary { padding: 12px 15px; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; font-weight: bold; background-color: #313244; transition: background 0.2s; }
             summary:hover { background-color: #45475a; }
@@ -106,6 +117,9 @@ def dashboard():
             .acc-arrow { color: #89b4fa; transition: transform 0.2s; }
             details[open] .acc-arrow { transform: rotate(90deg); }
             
+            .badge-on { background-color: rgba(166, 227, 161, 0.1); border: 1px solid #a6e3a1; color: #a6e3a1; font-size: 10px; padding: 2px 6px; border-radius: 12px; margin-left: 5px; }
+            .badge-off { background-color: rgba(243, 139, 168, 0.1); border: 1px solid #f38ba8; color: #f38ba8; font-size: 10px; padding: 2px 6px; border-radius: 12px; margin-left: 5px; }
+            
             .acc-quick-stats { display: flex; flex-direction: column; align-items: flex-end; font-size: 13px; }
             .acc-sheckles { color: #f9e2af; }
             .acc-sph { color: #a6e3a1; font-size: 12px; }
@@ -113,7 +127,6 @@ def dashboard():
 
             .acc-content { padding: 15px; }
             
-            /* NHÃN PHÂN LOẠI */
             .category { margin-bottom: 12px; }
             .cat-title { font-size: 12px; text-transform: uppercase; color: #a6adc8; margin-bottom: 8px; font-weight: bold; border-bottom: 1px dashed #45475a; padding-bottom: 4px;}
             .item-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 5px; display: inline-block; margin-bottom: 5px; font-weight: bold; border: 1px solid #45475a; }
@@ -137,7 +150,10 @@ def dashboard():
         <h2>📊 Bảng Giám Sát Nông Trại</h2>
         
         <div class="summary-card">
-            <div class="summary-title">🏆 TỔNG TÀI SẢN (Đang chạy: {{ stats_db|length }} Máy)</div>
+            <div class="summary-title">
+                <span>🏆 TỔNG TÀI SẢN</span>
+                <span class="server-status"><span class="txt-on">🟢 {{ online_count }} ON</span> | <span class="txt-off">🔴 {{ offline_count }} OFF</span></span>
+            </div>
             
             <div class="total-sheckles">
                 💰 {{ format_num(total_stats.get('Sheckles', 0)) }}
@@ -161,10 +177,15 @@ def dashboard():
                 <div class="acc-name">
                     <span class="acc-arrow">▶</span>
                     <span>{{ user }}</span>
+                    {% if data.status == 'ON' %}
+                        <span class="badge-on">🟢 ONLINE</span>
+                    {% else %}
+                        <span class="badge-off">🔴 OFFLINE</span>
+                    {% endif %}
                 </div>
                 <div class="acc-quick-stats">
                     <div class="acc-sheckles">💰 {{ format_num(data.stats.get('Sheckles', 0)) }}</div>
-                    {% if data.sph > 0 %}
+                    {% if data.sph > 0 and data.status == 'ON' %}
                         <div class="acc-sph">▲ +{{ format_num(data.sph) }}/h</div>
                     {% endif %}
                     <div class="acc-time">⌚ {{ data.last_updated }}</div>
@@ -207,7 +228,7 @@ def dashboard():
     </body>
     </html>
     """
-    return render_template_string(html_template, stats_db=stats_db, total_stats=total_stats, total_sph=total_sph, format_num=format_num, get_category=get_category)
+    return render_template_string(html_template, stats_db=stats_db, total_stats=total_stats, total_sph=total_sph, online_count=online_count, offline_count=offline_count, format_num=format_num, get_category=get_category)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
