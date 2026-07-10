@@ -2,31 +2,23 @@ from flask import Flask, request, jsonify, render_template_string
 from datetime import datetime
 
 app = Flask(__name__)
-
-# Bộ nhớ tạm để lưu chỉ số của toàn bộ dàn acc
 stats_db = {}
 
-# Đường dẫn để Script Roblox bắn dữ liệu về
 @app.route('/api/trackstats', methods=['POST'])
 def receive_stats():
     try:
         data = request.json
         username = data.get('username')
+        if not username: return jsonify({"error": "Thiếu tên"}), 400
         
-        if not username:
-            return jsonify({"error": "Thiếu tên tài khoản"}), 400
-        
-        # Cập nhật thông số mới nhất của acc đó vào bộ nhớ
         stats_db[username] = {
-            'money': data.get('money', 0),
-            'level': data.get('level', 0),
+            'stats': data.get('stats', {}), # Nhận mọi loại dữ liệu gửi về
             'last_updated': datetime.now().strftime("%H:%M:%S")
         }
-        return jsonify({"status": "Thành công"}), 200
+        return jsonify({"status": "OK"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Đường dẫn trang chủ để bạn xem bảng thống kê (Dashboard)
 @app.route('/')
 def dashboard():
     html_template = """
@@ -40,6 +32,7 @@ def dashboard():
             th, td { border: 1px solid #45475a; padding: 12px; text-align: left; }
             th { background-color: #313244; color: #a6e3a1; }
             tr:nth-child(even) { background-color: #181825; }
+            .item-badge { background-color: #89b4fa; color: #11111b; padding: 4px 8px; border-radius: 4px; font-size: 13px; margin-right: 5px; display: inline-block; margin-bottom: 5px; font-weight: bold;}
         </style>
     </head>
     <body>
@@ -48,22 +41,22 @@ def dashboard():
         <table>
             <tr>
                 <th>Tên Tài Khoản</th>
-                <th>Tiền/Vàng</th>
-                <th>Cấp Độ</th>
-                <th>Lần cập nhật cuối</th>
+                <th>Thông Số & Vật Phẩm</th>
+                <th>Cập nhật lúc</th>
             </tr>
-            {% for user, stat in stats_db.items() %}
+            {% for user, data in stats_db.items() %}
             <tr>
                 <td>{{ user }}</td>
-                <td>{{ stat.money }}</td>
-                <td>{{ stat.level }}</td>
-                <td>{{ stat.last_updated }}</td>
+                <td>
+                    {% for key, value in data.stats.items() %}
+                        <span class="item-badge">{{ key }}: {{ value }}</span>
+                    {% endfor %}
+                </td>
+                <td>{{ data.last_updated }}</td>
             </tr>
             {% endfor %}
         </table>
-        <script>
-            setTimeout(function(){ location.reload(); }, 30000);
-        </script>
+        <script>setTimeout(function(){ location.reload(); }, 30000);</script>
     </body>
     </html>
     """
@@ -71,4 +64,4 @@ def dashboard():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
-  
+    
