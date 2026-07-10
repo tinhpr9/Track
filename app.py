@@ -14,12 +14,16 @@ def format_num(val):
         return str(num)
     except: return str(val)
 
-# Hàm phân loại tự động
+# BỘ LỌC ĐÃ ĐƯỢC NÂNG CẤP
 def get_category(key):
     if key == 'Sheckles': return 'money'
     if 'Seed' in key: return 'seed'
     if any(x in key for x in ['Trowel', 'Basic Pot', 'Build', 'Shovel', 'Sprinkler', 'Watering Can']): return 'gear'
-    if any(x in key for x in ['Bunny', 'Deer', 'Unicorn', 'Raccoon', 'IceSerpent', 'Robin', 'Turtle', 'Dragon', 'Active', 'Fly']): return 'pet'
+    
+    # Chỉ nhận diện đúng tên Pet, loại bỏ trái cây
+    pet_names = ['Bunny', 'Deer', 'Unicorn', 'Raccoon', 'IceSerpent', 'Robin', 'Turtle', 'BlackDragon', 'GoldenDragonfly', '[Active]']
+    if any(x in key for x in pet_names) and 'Fruit' not in key: return 'pet'
+    
     return 'other'
 
 @app.route('/api/trackstats', methods=['POST'])
@@ -73,7 +77,6 @@ def dashboard():
             .badge-other { background-color: #313244; }
             .badge-other .stat-val { color: #fab387; }
             
-            /* Hiệu ứng phát sáng viền đỏ cho thú cưng đang mang */
             .active-pet { border: 2px solid #f38ba8; box-shadow: 0 0 6px #f38ba8; }
         </style>
     </head>
