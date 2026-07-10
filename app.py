@@ -4,7 +4,6 @@ from datetime import datetime
 app = Flask(__name__)
 stats_db = {}
 
-# Hàm định dạng số thông minh thành K, M, B
 def format_num(val):
     try:
         num = float(val)
@@ -13,8 +12,15 @@ def format_num(val):
         elif num >= 1_000: return f"{num/1_000:.1f}K".replace(".0K", "K")
         if num == int(num): return str(int(num))
         return str(num)
-    except (ValueError, TypeError):
-        return str(val)
+    except: return str(val)
+
+# Hàm phân loại tự động
+def get_category(key):
+    if key == 'Sheckles': return 'money'
+    if 'Seed' in key: return 'seed'
+    if any(x in key for x in ['Trowel', 'Basic Pot', 'Build', 'Shovel', 'Sprinkler', 'Watering Can']): return 'gear'
+    if any(x in key for x in ['Bunny', 'Deer', 'Unicorn', 'Raccoon', 'IceSerpent', 'Robin', 'Turtle', 'Dragon', 'Active', 'Fly']): return 'pet'
+    return 'other'
 
 @app.route('/api/trackstats', methods=['POST'])
 def receive_stats():
@@ -52,7 +58,6 @@ def dashboard():
             .stat-name { color: #cdd6f4; }
             .stat-val { font-weight: bold; }
             
-            /* Bảng màu phân loại */
             .badge-money { background-color: #f9e2af; color: #11111b; border-color: #f9e2af; }
             .badge-money .stat-name { color: #11111b; }
             
@@ -67,6 +72,9 @@ def dashboard():
             
             .badge-other { background-color: #313244; }
             .badge-other .stat-val { color: #fab387; }
+            
+            /* Hiệu ứng phát sáng viền đỏ cho thú cưng đang mang */
+            .active-pet { border: 2px solid #f38ba8; box-shadow: 0 0 6px #f38ba8; }
         </style>
     </head>
     <body>
@@ -84,47 +92,37 @@ def dashboard():
                 <td>
                     <div class="category">
                         <div class="cat-title">💰 Tiền Tệ</div>
-                        {% for key, value in data.stats.items() %}
-                            {% if key == 'Sheckles' %}
-                                <span class="item-badge badge-money"><span class="stat-name">{{ key }}:</span> <span class="stat-val">{{ format_num(value) }}</span></span>
-                            {% endif %}
-                        {% endfor %}
+                        {% for key, value in data.stats.items() %}{% if get_category(key) == 'money' %}
+                            <span class="item-badge badge-money"><span class="stat-name">{{ key }}:</span> <span class="stat-val">{{ format_num(value) }}</span></span>
+                        {% endif %}{% endfor %}
                     </div>
                     
                     <div class="category">
                         <div class="cat-title">🌱 Hạt Giống</div>
-                        {% for key, value in data.stats.items() %}
-                            {% if 'Seed' in key %}
-                                <span class="item-badge badge-seed"><span class="stat-name">{{ key }}:</span> <span class="stat-val">{{ format_num(value) }}</span></span>
-                            {% endif %}
-                        {% endfor %}
+                        {% for key, value in data.stats.items() %}{% if get_category(key) == 'seed' %}
+                            <span class="item-badge badge-seed"><span class="stat-name">{{ key }}:</span> <span class="stat-val">{{ format_num(value) }}</span></span>
+                        {% endif %}{% endfor %}
                     </div>
 
                     <div class="category">
                         <div class="cat-title">🛠️ Công Cụ (Gear)</div>
-                        {% for key, value in data.stats.items() %}
-                            {% if key in ['Trowel', 'Basic Pot', 'Build', 'Shovel'] or 'Sprinkler' in key or 'Watering Can' in key %}
-                                <span class="item-badge badge-gear"><span class="stat-name">{{ key }}:</span> <span class="stat-val">{{ format_num(value) }}</span></span>
-                            {% endif %}
-                        {% endfor %}
+                        {% for key, value in data.stats.items() %}{% if get_category(key) == 'gear' %}
+                            <span class="item-badge badge-gear"><span class="stat-name">{{ key }}:</span> <span class="stat-val">{{ format_num(value) }}</span></span>
+                        {% endif %}{% endfor %}
                     </div>
                     
                     <div class="category">
                         <div class="cat-title">🐾 Thú Cưng</div>
-                        {% for key, value in data.stats.items() %}
-                            {% if key in ['Bunny', 'Deer', 'Unicorn', 'Raccoon', 'IceSerpent', 'Robin', 'Big Turtle', 'Huge Deer', 'Big Unicorn', 'BlackDragon', 'GoldenDragonfly'] %}
-                                <span class="item-badge badge-pet"><span class="stat-name">{{ key }}:</span> <span class="stat-val">{{ format_num(value) }}</span></span>
-                            {% endif %}
-                        {% endfor %}
+                        {% for key, value in data.stats.items() %}{% if get_category(key) == 'pet' %}
+                            <span class="item-badge badge-pet {% if 'Active' in key %}active-pet{% endif %}"><span class="stat-name">{{ key }}:</span> <span class="stat-val">{{ format_num(value) }}</span></span>
+                        {% endif %}{% endfor %}
                     </div>
 
                     <div class="category">
-                        <div class="cat-title">📦 Vật Phẩm Thu Hoạch / Khác</div>
-                        {% for key, value in data.stats.items() %}
-                            {% if key != 'Sheckles' and 'Seed' not in key and key not in ['Trowel', 'Basic Pot', 'Build', 'Shovel', 'Bunny', 'Deer', 'Unicorn', 'Raccoon', 'IceSerpent', 'Robin', 'Big Turtle', 'Huge Deer', 'Big Unicorn', 'BlackDragon', 'GoldenDragonfly'] and 'Sprinkler' not in key and 'Watering Can' not in key %}
-                                <span class="item-badge badge-other"><span class="stat-name">{{ key }}:</span> <span class="stat-val">{{ format_num(value) }}</span></span>
-                            {% endif %}
-                        {% endfor %}
+                        <div class="cat-title">📦 Khác</div>
+                        {% for key, value in data.stats.items() %}{% if get_category(key) == 'other' %}
+                            <span class="item-badge badge-other"><span class="stat-name">{{ key }}:</span> <span class="stat-val">{{ format_num(value) }}</span></span>
+                        {% endif %}{% endfor %}
                     </div>
                 </td>
                 <td style="text-align: center;"><strong>{{ data.last_updated }}</strong></td>
@@ -135,7 +133,7 @@ def dashboard():
     </body>
     </html>
     """
-    return render_template_string(html_template, stats_db=stats_db, format_num=format_num)
+    return render_template_string(html_template, stats_db=stats_db, format_num=format_num, get_category=get_category)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
