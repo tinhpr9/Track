@@ -108,7 +108,7 @@ def clear_history():
     stats_db['history_logs'] = []
     save_db()
     return jsonify({"status": "OK"}), 200
-        @app.route('/')
+@app.route('/')
 def dashboard():
     total_stats = {}
     total_sph = online_count = offline_count = 0
@@ -437,3 +437,4 @@ def dashboard():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
+    
