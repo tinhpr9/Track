@@ -50,23 +50,41 @@ def receive_stats():
         new_sheckles = float(user_stats.get('Sheckles', 0))
         
         if username not in stats_db['accounts']:
-            stats_db['accounts'][username] = {'stats': {}, 'last_ping': 0, 'sph': 0, 'sheckles_history': []}
+            stats_db['accounts'][username] = {
+                'stats': {}, 'last_ping': 0, 'sph': 0, 'sheckles_history': [],
+                'last_log_time': curr_time, 'last_logged_sheckles': new_sheckles,
+                'online_since': curr_time
+            }
             
         acc = stats_db['accounts'][username]
-        old_sheckles = float(acc['stats'].get('Sheckles', 0))
         
-        if old_sheckles > 0 and new_sheckles != old_sheckles:
-            diff = new_sheckles - old_sheckles
-            action = "TĂNG" if diff > 0 else "GIẢM"
-            log_entry = {
-                "time": (datetime.utcnow() + timedelta(hours=7)).strftime("%d/%m %H:%M:%S"),
-                "user": username,
-                "action": action,
-                "amount": abs(diff),
-                "new_total": new_sheckles
-            }
-            stats_db['history_logs'].insert(0, log_entry)
-            if len(stats_db['history_logs']) > 1000: stats_db['history_logs'].pop()
+        if curr_time - acc.get('last_ping', 0) > 70:
+            acc['online_since'] = curr_time
+            
+        if 'online_since' not in acc:
+            acc['online_since'] = curr_time
+
+        if 'last_log_time' not in acc:
+            acc['last_log_time'] = curr_time
+            acc['last_logged_sheckles'] = new_sheckles
+
+        if curr_time - acc['last_log_time'] >= 3600:
+            last_sheck = float(acc.get('last_logged_sheckles', 0))
+            if last_sheck > 0 and new_sheckles != last_sheck:
+                diff = new_sheckles - last_sheck
+                action = "TĂNG" if diff > 0 else "GIẢM"
+                log_entry = {
+                    "time": (datetime.utcnow() + timedelta(hours=7)).strftime("%d/%m %H:%M:%S"),
+                    "user": username,
+                    "action": action,
+                    "amount": abs(diff),
+                    "new_total": new_sheckles
+                }
+                stats_db['history_logs'].insert(0, log_entry)
+                if len(stats_db['history_logs']) > 1000: stats_db['history_logs'].pop()
+            
+            acc['last_log_time'] = curr_time
+            acc['last_logged_sheckles'] = new_sheckles
 
         acc['sheckles_history'].append([curr_time, new_sheckles])
         acc['sheckles_history'] = [h for h in acc['sheckles_history'] if curr_time - h[0] <= 3600]
@@ -74,8 +92,7 @@ def receive_stats():
         sph = 0
         if len(acc['sheckles_history']) > 1:
             time_diff = (acc['sheckles_history'][-1][0] - acc['sheckles_history'][0][0]) / 3600.0
-            if time_diff > 0:
-                sph = (acc['sheckles_history'][-1][1] - acc['sheckles_history'][0][1]) / time_diff
+            if time_diff > 0: sph = (acc['sheckles_history'][-1][1] - acc['sheckles_history'][0][1]) / time_diff
 
         acc['stats'] = user_stats
         acc['last_ping'] = curr_time
@@ -84,29 +101,33 @@ def receive_stats():
         
         save_db()
         return jsonify({"status": "OK"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clear_history', methods=['POST'])
 def clear_history():
     stats_db['history_logs'] = []
     save_db()
     return jsonify({"status": "OK"}), 200
-@app.route('/')
+        @app.route('/')
 def dashboard():
     total_stats = {}
     total_sph = online_count = offline_count = 0
     current_time = time.time()
     
     for user, data in stats_db['accounts'].items():
-        # Trở về cơ chế ON/OFF đơn giản: Nếu có ping trong 10 phút là ON
-        if current_time - data.get('last_ping', 0) <= 600:
+        if current_time - data.get('last_ping', 0) <= 70:
             data['status'] = 'ON'
             online_count += 1
             total_sph += data.get('sph', 0)
+            
+            uptime_sec = current_time - data.get('online_since', current_time)
+            hours = int(uptime_sec // 3600)
+            minutes = int((uptime_sec % 3600) // 60)
+            data['uptime_str'] = f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m"
         else:
             data['status'] = 'OFF'
             offline_count += 1
+            data['uptime_str'] = "-"
             
         for k, v in data.get('stats', {}).items():
             try: total_stats[k] = total_stats.get(k, 0) + float(v)
@@ -153,7 +174,11 @@ def dashboard():
             
             .category { margin-bottom: 20px; }
             .cat-title { font-size: 14px; text-transform: uppercase; color: #a6adc8; margin-bottom: 10px; font-weight: bold; border-bottom: 1px dashed var(--border); padding-bottom: 5px;}
-            .item-badge { padding: 6px 12px; border-radius: 6px; font-size: 14px; display: inline-block; margin: 4px; border: 1px solid var(--border); background: #313244; }
+            
+            /* Sửa Item Badge thành nút bấm được */
+            .item-badge { padding: 6px 12px; border-radius: 6px; font-size: 14px; display: inline-block; margin: 4px; border: 1px solid var(--border); background: #313244; cursor: pointer; transition: 0.2s; }
+            .item-badge:hover { transform: scale(1.05); filter: brightness(1.2); }
+            
             .stat-name { color: var(--text); }
             .stat-val { font-weight: bold; }
             
@@ -170,7 +195,16 @@ def dashboard():
             .text-green { color: var(--green); font-weight: bold; }
             .text-red { color: var(--red); font-weight: bold; }
             .btn-danger { background: var(--red); color: #11111b; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-bottom: 15px; }
-            .btn-danger:hover { opacity: 0.8; }
+            
+            /* CSS CHO BẢNG POPUP (MODAL) */
+            .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(3px); }
+            .modal-content { background-color: var(--card); margin: 10% auto; padding: 20px; border: 1px solid var(--accent); border-radius: 10px; width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); animation: dropDown 0.3s; }
+            @keyframes dropDown { from {transform: translateY(-20px); opacity: 0;} to {transform: translateY(0); opacity: 1;} }
+            .close { color: #a6adc8; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+            .close:hover { color: var(--red); }
+            .modal-list { max-height: 400px; overflow-y: auto; margin-top: 15px; }
+            .modal-table { width: 100%; border-collapse: collapse; }
+            .modal-table th { position: sticky; top: 0; background: #313244; }
         </style>
     </head>
     <body>
@@ -226,6 +260,7 @@ def dashboard():
                         <th>Tên Người Chơi</th>
                         <th>Sheckles 💰</th>
                         <th>Tốc Độ (SPH)</th>
+                        <th>Thời Gian Onl</th>
                         <th>Cập nhật cuối</th>
                     </tr>
                     {% for user, data in stats_db['accounts'].items() %}
@@ -237,6 +272,7 @@ def dashboard():
                         <td><strong>{{ user }}</strong></td>
                         <td style="color: var(--yellow); font-weight: bold;">{{ format_num(data.stats.get('Sheckles', 0)) }}</td>
                         <td style="color: var(--green);">+{{ format_num(data.sph) }}/h</td>
+                        <td style="color: #a6adc8; font-weight: bold;">{{ data.uptime_str }}</td>
                         <td style="color: #a6adc8; font-size: 12px;">{{ data.last_updated }}</td>
                     </tr>
                     {% endfor %}
@@ -245,40 +281,40 @@ def dashboard():
 
             <div id="tab-inventory" class="tab-content">
                 <div style="background: var(--card); padding: 25px; border-radius: 10px; border: 1px solid var(--border);">
-                    <h3 style="margin-top:0; color: var(--yellow); border-bottom: 1px solid var(--border); padding-bottom: 15px;">📦 TÀI SẢN TOÀN SERVER (GỘP TỪ TẤT CẢ TÀI KHOẢN)</h3>
+                    <h3 style="margin-top:0; color: var(--yellow); border-bottom: 1px solid var(--border); padding-bottom: 15px;">📦 TÀI SẢN TOÀN SERVER (BẤM VÀO ĐỂ XEM AI ĐANG GIỮ)</h3>
                     
                     <div class="category">
                         <div class="cat-title">🌳 CÂY ĐANG TRỒNG NGOÀI VƯỜN</div>
                         {% for k, v in total_stats.items() %}{% if get_category(k) == 'planted' %}
-                            <span class="item-badge badge-planted"><span class="stat-name">{{ k.replace('[Planted] ', '') }}:</span> <span class="stat-val">{{ format_num(v) }} gốc</span></span>
+                            <span class="item-badge badge-planted" onclick="showOwners('{{ k }}')"><span class="stat-name">{{ k.replace('[Planted] ', '') }}:</span> <span class="stat-val">{{ format_num(v) }} gốc</span></span>
                         {% endif %}{% endfor %}
                     </div>
 
                     <div class="category">
                         <div class="cat-title">🌱 HẠT GIỐNG (TỒN KHO)</div>
                         {% for k, v in total_stats.items() %}{% if get_category(k) == 'seed' %}
-                            <span class="item-badge badge-seed"><span class="stat-name">{{ k }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
+                            <span class="item-badge badge-seed" onclick="showOwners('{{ k }}')"><span class="stat-name">{{ k }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
                         {% endif %}{% endfor %}
                     </div>
 
                     <div class="category">
                         <div class="cat-title">🛠️ CÔNG CỤ & GEAR</div>
                         {% for k, v in total_stats.items() %}{% if get_category(k) == 'gear' %}
-                            <span class="item-badge badge-gear"><span class="stat-name">{{ k }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
+                            <span class="item-badge badge-gear" onclick="showOwners('{{ k }}')"><span class="stat-name">{{ k }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
                         {% endif %}{% endfor %}
                     </div>
                     
                     <div class="category">
                         <div class="cat-title">🐾 THÚ CƯNG</div>
                         {% for k, v in total_stats.items() %}{% if get_category(k) == 'pet' %}
-                            <span class="item-badge badge-pet"><span class="stat-name">{{ k.replace('[Active] ', '🌟 ') }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
+                            <span class="item-badge badge-pet" onclick="showOwners('{{ k }}')"><span class="stat-name">{{ k.replace('[Active] ', '🌟 ') }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
                         {% endif %}{% endfor %}
                     </div>
 
                     <div class="category">
                         <div class="cat-title">📦 TRÁI CÂY & VẬT PHẨM KHÁC</div>
                         {% for k, v in total_stats.items() %}{% if get_category(k) == 'other' and k != 'Sheckles' %}
-                            <span class="item-badge badge-other"><span class="stat-name">{{ k }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
+                            <span class="item-badge badge-other" onclick="showOwners('{{ k }}')"><span class="stat-name">{{ k }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
                         {% endif %}{% endfor %}
                     </div>
                 </div>
@@ -286,6 +322,7 @@ def dashboard():
 
             <div id="tab-history" class="tab-content">
                 <button class="btn-danger" onclick="clearHistory()">🗑️ Xóa Lịch Sử</button>
+                <p style="font-size: 13px; color: #a6adc8;"><i>Lưu ý: Để tránh quá tải, lịch sử dòng tiền của mỗi acc được chốt sổ 60 phút/lần.</i></p>
                 <table>
                     <tr>
                         <th>Thời Gian</th>
@@ -313,7 +350,59 @@ def dashboard():
             </div>
         </div>
 
+        <div id="ownerModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal()">&times;</span>
+                <h3 id="modalTitle" style="color: var(--yellow); margin-top: 0; border-bottom: 1px dashed var(--border); padding-bottom: 10px;">Tên Vật Phẩm</h3>
+                <div class="modal-list">
+                    <table class="modal-table" id="modalTableContent">
+                        </table>
+                </div>
+            </div>
+        </div>
+
         <script>
+            // Đưa toàn bộ dữ liệu DB vào Javascript để tìm kiếm
+            const rawDB = {{ stats_db['accounts'] | tojson | safe }};
+            
+            function showOwners(itemName) {
+                let results = [];
+                // Lọc các acc có chứa itemName
+                for (const [user, data] of Object.entries(rawDB)) {
+                    if (data.stats && data.stats[itemName] && parseFloat(data.stats[itemName]) > 0) {
+                        results.push({ user: user, amount: parseFloat(data.stats[itemName]) });
+                    }
+                }
+                
+                // Sắp xếp giảm dần theo số lượng
+                results.sort((a, b) => b.amount - a.amount);
+                
+                let html = '<tr><th>Tài khoản đang giữ</th><th>Số lượng</th></tr>';
+                results.forEach(r => {
+                    html += `<tr><td><strong>${r.user}</strong></td><td style="color:var(--green); font-weight:bold;">${r.amount}</td></tr>`;
+                });
+                
+                if(results.length === 0) html += '<tr><td colspan="2">Không có dữ liệu</td></tr>';
+                
+                // Làm đẹp tên hiển thị trên bảng
+                let displayTitle = itemName.replace('[Planted] ', '🌳 Cây: ').replace('[Active] ', '🌟 Pet: ');
+                
+                document.getElementById('modalTitle').innerText = displayTitle;
+                document.getElementById('modalTableContent').innerHTML = html;
+                document.getElementById('ownerModal').style.display = 'block';
+            }
+            
+            function closeModal() {
+                document.getElementById('ownerModal').style.display = 'none';
+            }
+            
+            // Bấm ra ngoài vùng đen để đóng bảng
+            window.onclick = function(event) {
+                if (event.target == document.getElementById('ownerModal')) {
+                    closeModal();
+                }
+            }
+
             function openTab(tabId, element) {
                 document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
                 document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -328,6 +417,9 @@ def dashboard():
             }
 
             setInterval(() => {
+                // Tạm dừng tự làm mới trang nếu bạn đang mở bảng xem chi tiết để không bị mất
+                if(document.getElementById('ownerModal').style.display === 'block') return; 
+                
                 fetch('/').then(res => res.text()).then(html => {
                     let parser = new DOMParser();
                     let newDoc = parser.parseFromString(html, 'text/html');
@@ -345,4 +437,3 @@ def dashboard():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
-    
