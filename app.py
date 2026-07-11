@@ -57,6 +57,8 @@ def receive_stats():
             }
             
         acc = stats_db['accounts'][username]
+        old_stats = acc.get('stats', {})
+        old_sheckles = float(old_stats.get('Sheckles', new_sheckles))
         
         if curr_time - acc.get('last_ping', 0) > 70:
             acc['online_since'] = curr_time
@@ -68,16 +70,48 @@ def receive_stats():
             acc['last_log_time'] = curr_time
             acc['last_logged_sheckles'] = new_sheckles
 
-        if curr_time - acc['last_log_time'] >= 3600:
+        # --- LOGIC MỚI: QUÉT LỊCH SỬ MUA ĐỒ TỨC THÌ ---
+        # Nếu tiền bị sụt giảm (Dấu hiệu của việc Mua Đồ / Nâng cấp)
+        if old_stats and new_sheckles < old_sheckles:
+            diff = old_sheckles - new_sheckles
+            bought_items = []
+            
+            # Quét xem trong kho vừa dư ra món nào mới
+            for k, v in user_stats.items():
+                if k == 'Sheckles': continue
+                try:
+                    old_v = float(old_stats.get(k, 0))
+                    new_v = float(v)
+                    if new_v > old_v:
+                        bought_items.append(f"{k} (+{format_num(new_v - old_v)})")
+                except: pass
+            
+            action_text = "MUA: " + ", ".join(bought_items) if bought_items else "TIÊU TIỀN"
+            
+            log_entry = {
+                "time": (datetime.utcnow() + timedelta(hours=7)).strftime("%d/%m %H:%M:%S"),
+                "user": username,
+                "action": action_text,
+                "amount": diff,
+                "new_total": new_sheckles
+            }
+            stats_db['history_logs'].insert(0, log_entry)
+            if len(stats_db['history_logs']) > 1000: stats_db['history_logs'].pop()
+            
+            # Khởi tạo lại vòng 60 phút
+            acc['last_log_time'] = curr_time
+            acc['last_logged_sheckles'] = new_sheckles
+
+        # --- GHI NHẬN TĂNG TIỀN DO FARM (Mỗi 60 phút) ---
+        elif curr_time - acc['last_log_time'] >= 3600:
             last_sheck = float(acc.get('last_logged_sheckles', 0))
-            if last_sheck > 0 and new_sheckles != last_sheck:
+            if last_sheck > 0 and new_sheckles > last_sheck: 
                 diff = new_sheckles - last_sheck
-                action = "TĂNG" if diff > 0 else "GIẢM"
                 log_entry = {
                     "time": (datetime.utcnow() + timedelta(hours=7)).strftime("%d/%m %H:%M:%S"),
                     "user": username,
-                    "action": action,
-                    "amount": abs(diff),
+                    "action": "TĂNG",
+                    "amount": diff,
                     "new_total": new_sheckles
                 }
                 stats_db['history_logs'].insert(0, log_entry)
@@ -85,6 +119,8 @@ def receive_stats():
             
             acc['last_log_time'] = curr_time
             acc['last_logged_sheckles'] = new_sheckles
+
+        # ------------------------------------------------
 
         acc['sheckles_history'].append([curr_time, new_sheckles])
         acc['sheckles_history'] = [h for h in acc['sheckles_history'] if curr_time - h[0] <= 3600]
