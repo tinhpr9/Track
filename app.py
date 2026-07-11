@@ -308,37 +308,31 @@ def dashboard():
                         </div>
                         <table>
                             <tr>
-                                <th>Trạng Thái</th>
-                                <th>Tên Người Chơi</th>
-                                <th>Sheckles 💰</th>
-                                <th>Tốc Độ (SPH)</th>
-                                <th>Thời Gian Onl</th>
-                                <th>Cập nhật cuối</th>
+                                <th>Thời Gian</th>
+                                <th>Tài Khoản</th>
+                                <th>Biến Động Kho</th>
+                                <th>Số dư mới</th>
                             </tr>
-                            {% for user, data in stats_db['accounts'].items() %}
+                            {% for log in stats_db['history_logs'] %}
                             <tr>
+                                <td style="color:#a6adc8; font-size: 12px;">{{ log.time }}</td>
+                                <td><strong>{{ log.user }}</strong></td>
                                 <td>
-                                    {% if data.status == 'ON' %}<span class="badge-on">🟢 TRỰC TUYẾN</span>
-                                    {% else %}<span class="badge-off">🔴 MẤT KẾT NỐI</span>{% endif %}
+                                    {% if log.action == 'TĂNG' %}
+                                        <span class="text-green">▲ +{{ format_num(log.amount) }} (Farm)</span>
+                                    {% else %}
+                                        <!-- Hiển thị tên món đồ vừa mua -->
+                                        <span class="text-red" style="font-size: 12px;">
+                                            ▼ -{{ format_num(log.amount) }}<br>
+                                            <i style="color: #cba6f7;">{{ log.action }}</i>
+                                        </span>
+                                    {% endif %}
                                 </td>
-                                <td><strong>{{ user }}</strong></td>
-                                <td style="color: var(--yellow); font-weight: bold;">{{ format_num(data.stats.get('Sheckles', 0)) }}</td>
-                                <td style="color: var(--green);">+{{ format_num(data.sph) }}/h</td>
-                                <td style="color: #a6adc8; font-weight: bold;">{{ data.uptime_str }}</td>
-                                <td style="color: #a6adc8; font-size: 12px;">{{ data.last_updated }}</td>
+                                <td style="color:var(--yellow)">{{ format_num(log.new_total) }}</td>
                             </tr>
                             {% endfor %}
                         </table>
-                    </div>
-
-                    <!-- BÊN PHẢI: LỊCH SỬ BIẾN ĐỘNG DÒNG TIỀN -->
-                    <div class="split-right">
-                        <div class="split-header-box">
-                            <h3 class="split-title" style="color: var(--yellow);">🕒 Lịch Sử Giao Dịch</h3>
-                            <button class="btn-danger" onclick="clearHistory()">🗑️ Xóa Lịch Sử</button>
-                        </div>
-                        <p style="font-size: 12px; color: #a6adc8; margin: -5px 0 10px 0;"><i>Lưu ý: Chốt sổ 60 phút/lần để tránh nặng Database.</i></p>
-                        <table>
+                        
                             <tr>
                                 <th>Thời Gian</th>
                                 <th>Tài Khoản</th>
