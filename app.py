@@ -108,6 +108,7 @@ def clear_history():
     stats_db['history_logs'] = []
     save_db()
     return jsonify({"status": "OK"}), 200
+
 @app.route('/')
 def dashboard():
     total_stats = {}
@@ -147,7 +148,7 @@ def dashboard():
             .tab-btn:hover { opacity: 1; background-color: var(--card-hover); }
             .tab-btn.active { opacity: 1; border-bottom: 3px solid var(--accent); color: var(--accent); }
             
-            .container { padding: 20px; max-width: 1200px; margin: auto; }
+            .container { padding: 20px; max-width: 1600px; margin: auto; }
             .tab-content { display: none; animation: fadeIn 0.3s; }
             .tab-content.active { display: block; }
             @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
@@ -164,6 +165,12 @@ def dashboard():
             .card-value { font-size: 28px; font-weight: bold; }
             .card-sub { font-size: 13px; color: var(--green); margin-top: 5px; font-weight: bold; }
 
+            /* CSS CHIA ĐÔI MÀN HÌNH CHỨA BẢNG TÀI KHOẢN VÀ LỊCH SỬ GIAO DỊCH */
+            .split-wrapper { display: flex; gap: 20px; align-items: flex-start; }
+            .split-left, .split-right { flex: 1; min-width: 0; background: var(--card); border-radius: 10px; border: 1px solid var(--border); padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.15); }
+            .split-header-box { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px dashed var(--border); padding-bottom: 10px; }
+            .split-title { font-size: 16px; font-weight: bold; text-transform: uppercase; margin: 0; }
+
             table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; font-size: 14px; }
             th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
             th { background-color: #313244; color: #a6adc8; font-size: 12px; text-transform: uppercase; }
@@ -175,7 +182,6 @@ def dashboard():
             .category { margin-bottom: 20px; }
             .cat-title { font-size: 14px; text-transform: uppercase; color: #a6adc8; margin-bottom: 10px; font-weight: bold; border-bottom: 1px dashed var(--border); padding-bottom: 5px;}
             
-            /* Sửa Item Badge thành nút bấm được */
             .item-badge { padding: 6px 12px; border-radius: 6px; font-size: 14px; display: inline-block; margin: 4px; border: 1px solid var(--border); background: #313244; cursor: pointer; transition: 0.2s; }
             .item-badge:hover { transform: scale(1.05); filter: brightness(1.2); }
             
@@ -194,9 +200,8 @@ def dashboard():
             
             .text-green { color: var(--green); font-weight: bold; }
             .text-red { color: var(--red); font-weight: bold; }
-            .btn-danger { background: var(--red); color: #11111b; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-bottom: 15px; }
+            .btn-danger { background: var(--red); color: #11111b; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 13px; }
             
-            /* CSS CHO BẢNG POPUP (MODAL) */
             .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(3px); }
             .modal-content { background-color: var(--card); margin: 10% auto; padding: 20px; border: 1px solid var(--accent); border-radius: 10px; width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); animation: dropDown 0.3s; }
             @keyframes dropDown { from {transform: translateY(-20px); opacity: 0;} to {transform: translateY(0); opacity: 1;} }
@@ -205,23 +210,26 @@ def dashboard():
             .modal-list { max-height: 400px; overflow-y: auto; margin-top: 15px; }
             .modal-table { width: 100%; border-collapse: collapse; }
             .modal-table th { position: sticky; top: 0; background: #313244; }
+
+            @media (max-width: 1024px) {
+                .split-wrapper { flex-direction: column; }
+            }
         </style>
     </head>
+    """
+    html_template += """
     <body>
         <div class="navbar">
             <button class="tab-btn active" onclick="openTab('tab-overview', this)">📊 Tổng Quan</button>
-            <button class="tab-btn" onclick="openTab('tab-accounts', this)">👥 Tài Khoản ({{ online_count }}/{{ stats_db['accounts']|length }})</button>
+            <button class="tab-btn" onclick="openTab('tab-accounts', this)">👥 Tài Khoản & Lịch Sử ({{ online_count }}/{{ stats_db['accounts']|length }})</button>
             <button class="tab-btn" onclick="openTab('tab-inventory', this)">📦 TỔNG KHO</button>
-            <button class="tab-btn" onclick="openTab('tab-history', this)">🕒 Lịch Sử GD</button>
         </div>
 
         <div class="container">
             <div id="tab-overview" class="tab-content active">
                 <div class="dashboard-grid">
                     <div class="stat-card card-online">
-                        <div class="card-title">
-                            <span>TÌNH TRẠNG MÁY</span>
-                        </div>
+                        <div class="card-title"><span>TÌNH TRẠNG MÁY</span></div>
                         <div style="display: flex; gap: 8px; margin-top: 10px;">
                             <span class="badge-on">🟢 {{ online_count }} ĐANG CÀY</span>
                             <span class="badge-off">🔴 {{ offline_count }} OFF</span>
@@ -253,64 +261,103 @@ def dashboard():
                 </div>
             </div>
 
+            <!-- TAB ĐÃ ĐƯỢC ÉP GỘP SONG SONG 50/50 -->
             <div id="tab-accounts" class="tab-content">
-                <table>
-                    <tr>
-                        <th>Trạng Thái</th>
-                        <th>Tên Người Chơi</th>
-                        <th>Sheckles 💰</th>
-                        <th>Tốc Độ (SPH)</th>
-                        <th>Thời Gian Onl</th>
-                        <th>Cập nhật cuối</th>
-                    </tr>
-                    {% for user, data in stats_db['accounts'].items() %}
-                    <tr>
-                        <td>
-                            {% if data.status == 'ON' %}<span class="badge-on">🟢 TRỰC TUYẾN</span>
-                            {% else %}<span class="badge-off">🔴 MẤT KẾT NỐI</span>{% endif %}
-                        </td>
-                        <td><strong>{{ user }}</strong></td>
-                        <td style="color: var(--yellow); font-weight: bold;">{{ format_num(data.stats.get('Sheckles', 0)) }}</td>
-                        <td style="color: var(--green);">+{{ format_num(data.sph) }}/h</td>
-                        <td style="color: #a6adc8; font-weight: bold;">{{ data.uptime_str }}</td>
-                        <td style="color: #a6adc8; font-size: 12px;">{{ data.last_updated }}</td>
-                    </tr>
-                    {% endfor %}
-                </table>
+                <div class="split-wrapper">
+                    
+                    <!-- BÊN TRÁI: DANH SÁCH TÀI KHOẢN CLONE -->
+                    <div class="split-left">
+                        <div class="split-header-box">
+                            <h3 class="split-title" style="color: var(--accent);">👥 Danh Sách Tài Khoản</h3>
+                        </div>
+                        <table>
+                            <tr>
+                                <th>Trạng Thái</th>
+                                <th>Tên Người Chơi</th>
+                                <th>Sheckles 💰</th>
+                                <th>Tốc Độ (SPH)</th>
+                                <th>Thời Gian Onl</th>
+                                <th>Cập nhật cuối</th>
+                            </tr>
+                            {% for user, data in stats_db['accounts'].items() %}
+                            <tr>
+                                <td>
+                                    {% if data.status == 'ON' %}<span class="badge-on">🟢 TRỰC TUYẾN</span>
+                                    {% else %}<span class="badge-off">🔴 MẤT KẾT NỐI</span>{% endif %}
+                                </td>
+                                <td><strong>{{ user }}</strong></td>
+                                <td style="color: var(--yellow); font-weight: bold;">{{ format_num(data.stats.get('Sheckles', 0)) }}</td>
+                                <td style="color: var(--green);">+{{ format_num(data.sph) }}/h</td>
+                                <td style="color: #a6adc8; font-weight: bold;">{{ data.uptime_str }}</td>
+                                <td style="color: #a6adc8; font-size: 12px;">{{ data.last_updated }}</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    </div>
+
+                    <!-- BÊN PHẢI: LỊCH SỬ BIẾN ĐỘNG DÒNG TIỀN -->
+                    <div class="split-right">
+                        <div class="split-header-box">
+                            <h3 class="split-title" style="color: var(--yellow);">🕒 Lịch Sử Giao Dịch</h3>
+                            <button class="btn-danger" onclick="clearHistory()">🗑️ Xóa Lịch Sử</button>
+                        </div>
+                        <p style="font-size: 12px; color: #a6adc8; margin: -5px 0 10px 0;"><i>Lưu ý: Chốt sổ 60 phút/lần để tránh nặng Database.</i></p>
+                        <table>
+                            <tr>
+                                <th>Thời Gian</th>
+                                <th>Tài Khoản</th>
+                                <th>Hành Động</th>
+                                <th>Số Lượng</th>
+                                <th>Số dư mới</th>
+                            </tr>
+                            {% for log in stats_db['history_logs'] %}
+                            <tr>
+                                <td style="color:#a6adc8">{{ log.time }}</td>
+                                <td><strong>{{ log.user }}</strong></td>
+                                <td>
+                                    {% if log.action == 'TĂNG' %}<span class="text-green">▲ TĂNG</span>
+                                    {% else %}<span class="text-red">▼ GIẢM</span>{% endif %}
+                                </td>
+                                <td>
+                                    {% if log.action == 'TĂNG' %}<span class="text-green">+{{ format_num(log.amount) }}</span>
+                                    {% else %}<span class="text-red">-{{ format_num(log.amount) }}</span>{% endif %}
+                                </td>
+                                <td style="color:var(--yellow)">{{ format_num(log.new_total) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    </div>
+
+                </div>
             </div>
 
             <div id="tab-inventory" class="tab-content">
                 <div style="background: var(--card); padding: 25px; border-radius: 10px; border: 1px solid var(--border);">
                     <h3 style="margin-top:0; color: var(--yellow); border-bottom: 1px solid var(--border); padding-bottom: 15px;">📦 TÀI SẢN TOÀN SERVER (BẤM VÀO ĐỂ XEM AI ĐANG GIỮ)</h3>
-                    
                     <div class="category">
                         <div class="cat-title">🌳 CÂY ĐANG TRỒNG NGOÀI VƯỜN</div>
                         {% for k, v in total_stats.items() %}{% if get_category(k) == 'planted' %}
                             <span class="item-badge badge-planted" onclick="showOwners('{{ k }}')"><span class="stat-name">{{ k.replace('[Planted] ', '') }}:</span> <span class="stat-val">{{ format_num(v) }} gốc</span></span>
                         {% endif %}{% endfor %}
                     </div>
-
                     <div class="category">
                         <div class="cat-title">🌱 HẠT GIỐNG (TỒN KHO)</div>
                         {% for k, v in total_stats.items() %}{% if get_category(k) == 'seed' %}
                             <span class="item-badge badge-seed" onclick="showOwners('{{ k }}')"><span class="stat-name">{{ k }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
                         {% endif %}{% endfor %}
                     </div>
-
                     <div class="category">
                         <div class="cat-title">🛠️ CÔNG CỤ & GEAR</div>
                         {% for k, v in total_stats.items() %}{% if get_category(k) == 'gear' %}
                             <span class="item-badge badge-gear" onclick="showOwners('{{ k }}')"><span class="stat-name">{{ k }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
                         {% endif %}{% endfor %}
                     </div>
-                    
                     <div class="category">
                         <div class="cat-title">🐾 THÚ CƯNG</div>
                         {% for k, v in total_stats.items() %}{% if get_category(k) == 'pet' %}
                             <span class="item-badge badge-pet" onclick="showOwners('{{ k }}')"><span class="stat-name">{{ k.replace('[Active] ', '🌟 ') }}:</span> <span class="stat-val">{{ format_num(v) }}</span></span>
                         {% endif %}{% endfor %}
                     </div>
-
                     <div class="category">
                         <div class="cat-title">📦 TRÁI CÂY & VẬT PHẨM KHÁC</div>
                         {% for k, v in total_stats.items() %}{% if get_category(k) == 'other' and k != 'Sheckles' %}
@@ -319,35 +366,6 @@ def dashboard():
                     </div>
                 </div>
             </div>
-
-            <div id="tab-history" class="tab-content">
-                <button class="btn-danger" onclick="clearHistory()">🗑️ Xóa Lịch Sử</button>
-                <p style="font-size: 13px; color: #a6adc8;"><i>Lưu ý: Để tránh quá tải, lịch sử dòng tiền của mỗi acc được chốt sổ 60 phút/lần.</i></p>
-                <table>
-                    <tr>
-                        <th>Thời Gian</th>
-                        <th>Tài Khoản</th>
-                        <th>Hành Động</th>
-                        <th>Số Lượng (Sheckles)</th>
-                        <th>Số dư mới</th>
-                    </tr>
-                    {% for log in stats_db['history_logs'] %}
-                    <tr>
-                        <td style="color:#a6adc8">{{ log.time }}</td>
-                        <td><strong>{{ log.user }}</strong></td>
-                        <td>
-                            {% if log.action == 'TĂNG' %}<span class="text-green">▲ TĂNG</span>
-                            {% else %}<span class="text-red">▼ GIẢM</span>{% endif %}
-                        </td>
-                        <td>
-                            {% if log.action == 'TĂNG' %}<span class="text-green">+{{ format_num(log.amount) }}</span>
-                            {% else %}<span class="text-red">-{{ format_num(log.amount) }}</span>{% endif %}
-                        </td>
-                        <td style="color:var(--yellow)">{{ format_num(log.new_total) }}</td>
-                    </tr>
-                    {% endfor %}
-                </table>
-            </div>
         </div>
 
         <div id="ownerModal" class="modal">
@@ -355,53 +373,31 @@ def dashboard():
                 <span class="close" onclick="closeModal()">&times;</span>
                 <h3 id="modalTitle" style="color: var(--yellow); margin-top: 0; border-bottom: 1px dashed var(--border); padding-bottom: 10px;">Tên Vật Phẩm</h3>
                 <div class="modal-list">
-                    <table class="modal-table" id="modalTableContent">
-                        </table>
+                    <table class="modal-table" id="modalTableContent"></table>
                 </div>
             </div>
         </div>
 
         <script>
-            // Đưa toàn bộ dữ liệu DB vào Javascript để tìm kiếm
             const rawDB = {{ stats_db['accounts'] | tojson | safe }};
-            
             function showOwners(itemName) {
                 let results = [];
-                // Lọc các acc có chứa itemName
                 for (const [user, data] of Object.entries(rawDB)) {
                     if (data.stats && data.stats[itemName] && parseFloat(data.stats[itemName]) > 0) {
                         results.push({ user: user, amount: parseFloat(data.stats[itemName]) });
                     }
                 }
-                
-                // Sắp xếp giảm dần theo số lượng
                 results.sort((a, b) => b.amount - a.amount);
-                
                 let html = '<tr><th>Tài khoản đang giữ</th><th>Số lượng</th></tr>';
-                results.forEach(r => {
-                    html += `<tr><td><strong>${r.user}</strong></td><td style="color:var(--green); font-weight:bold;">${r.amount}</td></tr>`;
-                });
-                
+                results.forEach(r => { html += `<tr><td><strong>${r.user}</strong></td><td style="color:var(--green); font-weight:bold;">${r.amount}</td></tr>`; });
                 if(results.length === 0) html += '<tr><td colspan="2">Không có dữ liệu</td></tr>';
-                
-                // Làm đẹp tên hiển thị trên bảng
                 let displayTitle = itemName.replace('[Planted] ', '🌳 Cây: ').replace('[Active] ', '🌟 Pet: ');
-                
                 document.getElementById('modalTitle').innerText = displayTitle;
                 document.getElementById('modalTableContent').innerHTML = html;
                 document.getElementById('ownerModal').style.display = 'block';
             }
-            
-            function closeModal() {
-                document.getElementById('ownerModal').style.display = 'none';
-            }
-            
-            // Bấm ra ngoài vùng đen để đóng bảng
-            window.onclick = function(event) {
-                if (event.target == document.getElementById('ownerModal')) {
-                    closeModal();
-                }
-            }
+            function closeModal() { document.getElementById('ownerModal').style.display = 'none'; }
+            window.onclick = function(event) { if (event.target == document.getElementById('ownerModal')) { closeModal(); } }
 
             function openTab(tabId, element) {
                 document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -409,7 +405,6 @@ def dashboard():
                 document.getElementById(tabId).classList.add('active');
                 element.classList.add('active');
             }
-            
             function clearHistory() {
                 if(confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử không?")) {
                     fetch('/api/clear_history', { method: 'POST' }).then(() => location.reload());
@@ -417,16 +412,13 @@ def dashboard():
             }
 
             setInterval(() => {
-                // Tạm dừng tự làm mới trang nếu bạn đang mở bảng xem chi tiết để không bị mất
                 if(document.getElementById('ownerModal').style.display === 'block') return; 
-                
                 fetch('/').then(res => res.text()).then(html => {
                     let parser = new DOMParser();
                     let newDoc = parser.parseFromString(html, 'text/html');
                     document.getElementById('tab-overview').innerHTML = newDoc.getElementById('tab-overview').innerHTML;
                     document.getElementById('tab-accounts').innerHTML = newDoc.getElementById('tab-accounts').innerHTML;
                     document.getElementById('tab-inventory').innerHTML = newDoc.getElementById('tab-inventory').innerHTML;
-                    document.getElementById('tab-history').innerHTML = newDoc.getElementById('tab-history').innerHTML;
                 });
             }, 30000);
         </script>
