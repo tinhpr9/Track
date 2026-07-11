@@ -306,8 +306,7 @@ def dashboard():
                             <tr>
                                 <th>Thời Gian</th>
                                 <th>Tài Khoản</th>
-                                <th>Hành Động</th>
-                                <th>Số Lượng</th>
+                                <th>Biến Động</th> <!-- Đã gộp 2 cột thành 1 -->
                                 <th>Số dư mới</th>
                             </tr>
                             {% for log in stats_db['history_logs'] %}
@@ -315,12 +314,12 @@ def dashboard():
                                 <td style="color:#a6adc8">{{ log.time }}</td>
                                 <td><strong>{{ log.user }}</strong></td>
                                 <td>
-                                    {% if log.action == 'TĂNG' %}<span class="text-green">▲ TĂNG</span>
-                                    {% else %}<span class="text-red">▼ GIẢM</span>{% endif %}
-                                </td>
-                                <td>
-                                    {% if log.action == 'TĂNG' %}<span class="text-green">+{{ format_num(log.amount) }}</span>
-                                    {% else %}<span class="text-red">-{{ format_num(log.amount) }}</span>{% endif %}
+                                    <!-- Hiển thị gộp chung mũi tên và số lượng -->
+                                    {% if log.action == 'TĂNG' %}
+                                        <span class="text-green">▲ +{{ format_num(log.amount) }}</span>
+                                    {% else %}
+                                        <span class="text-red">▼ -{{ format_num(log.amount) }}</span>
+                                    {% endif %}
                                 </td>
                                 <td style="color:var(--yellow)">{{ format_num(log.new_total) }}</td>
                             </tr>
